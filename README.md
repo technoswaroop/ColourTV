@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/home.jpg" width="900" alt="ColourTV on a TV: weather, clock and date at the top left, RAM and storage meters and a live cricket score at the top right, New in India picks, and a dock of seven apps with the All apps button">
+  <img src="docs/whats-on-today.jpg" width="900" alt="ColourTV What's on Today dashboard with Telugu panchangam, Indian market quotes, India and world headlines, live cricket score and app dock">
 </p>
 
 <h1 align="center">ColourTV</h1>
