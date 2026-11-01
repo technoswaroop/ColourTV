@@ -6,8 +6,8 @@
 
 <p align="center">
   A small, ad-free home screen for Android TV and Google TV, based on the MIT-licensed
-  <a href="https://github.com/rajupp/talkies">Talkies project by Raju · TechPP</a>.<br>
-  One calm screen: your apps, what's trending where you live, live cricket and football, light by day and dark at night.
+  <a href="https://github.com/technoswaroop/ColourTV">ColourTV project by technoswaroop</a>.<br>
+  One calm screen: your apps, what's trending where you live, live cricket and football, light by day and dark at night. Built on the source code from "https://github.com/rajupp/talkies"
 </p>
 
 <p align="center">
