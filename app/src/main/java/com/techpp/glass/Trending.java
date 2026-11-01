@@ -122,7 +122,7 @@ final class Trending {
         prefs = c.getSharedPreferences("trending", Context.MODE_PRIVATE);
     }
 
-    // ---------------------------------------------------------------- languages (Talkies settings → Picks languages)
+    // ---------------------------------------------------------------- languages (ColourTV settings → Picks languages)
 
     /** The original languages picks may be in, as TMDB's codes (ta, en, fr…); empty for all of them. */
     Set<String> languages() {

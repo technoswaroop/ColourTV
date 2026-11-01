@@ -43,6 +43,8 @@
                 android:layout_height="wrap_content"
                 android:layout_marginStart="-12dp"
                 android:orientation="horizontal">
+                <TextView android:id="@+id/tab_today" style="@style/TabText" android:text="What's on Today" />
+                <TextView android:id="@+id/tab_cameras" style="@style/TabText" android:layout_marginStart="2dp" android:text="Home Camera Live Feed" />
                 <TextView android:id="@+id/tab_recent" style="@style/TabText" android:text="Continue" />
                 <TextView android:id="@+id/tab_trending" style="@style/TabText" android:layout_marginStart="2dp" android:text="Trending" />
                 <TextView android:id="@+id/tab_india" style="@style/TabText" android:layout_marginStart="2dp" android:text="New in India" />
@@ -78,7 +80,7 @@
                 android:clipChildren="false"
                 android:clipToPadding="false"
                 android:orientation="horizontal">
-                <!-- RAM and storage free, unless hidden in Talkies settings -->
+                <!-- RAM and storage free, unless hidden in ColourTV settings -->
                 <com.techpp.glass.Meters android:id="@+id/meters" android:layout_width="112dp"
                     android:layout_height="44dp" android:layout_gravity="center_vertical"
                     android:layout_marginEnd="22dp" android:importantForAccessibility="no" />
@@ -195,7 +197,7 @@
             android:clipChildren="false"
             android:clipToPadding="false" />
 
-        <!-- Dock: one band, 5 to 10 apps (Talkies settings → Dock size), then the All apps button -->
+        <!-- Dock: one band, 5 to 10 apps (ColourTV settings → Dock size), then the All apps button -->
         <FrameLayout
             android:id="@+id/dock_band"
             android:layout_width="match_parent"

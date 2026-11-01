@@ -1,13 +1,13 @@
 name: Bug report
-description: Something in Talkies is broken or behaves wrongly.
+description: Something in ColourTV is broken or behaves wrongly.
 labels: [bug]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting! Questions and ideas go to [Discussions](https://github.com/rajupp/talkies/discussions), and
+        Thanks for reporting! Questions and ideas go to [Discussions](https://github.com/technoswaroop/ColourTV/discussions), and
         many setup problems (no picks, no weather, a greyed-out switch, "App not installed.") are answered in the
-        README's [Questions and fixes](https://github.com/rajupp/talkies#questions-and-fixes).
+        README's [Questions and fixes](https://github.com/technoswaroop/ColourTV#questions-and-fixes).
   - type: textarea
     id: what
     attributes:
@@ -33,8 +33,8 @@ body:
   - type: input
     id: version
     attributes:
-      label: Talkies version
-      description: Talkies settings → About.
+      label: ColourTV version
+      description: ColourTV settings → About.
       placeholder: e.g. 1.1.0
     validations:
       required: true

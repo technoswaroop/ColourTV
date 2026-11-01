@@ -29,14 +29,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Talkies settings → Keys and location → Send from your phone: the page a phone opens from the QR code, to paste the
+ * ColourTV settings → Keys and location → Send from your phone: the page a phone opens from the QR code, to paste the
  * TMDB key, the CricketData key and the weather area instead of typing them with the remote. Its address is
  * http://(the TV's address on the home network):(a free port)/(a one-time random token). It takes one form (one
  * POST), has the TV check each key with its service, answers with the result and stops; after 5 minutes it stops
  * anyway. Plain HTTP, since a phone can't check a certificate for a LAN address; it listens only on that address, and
  * nothing sent is logged. Adapted from Free My TV's KeyPage (MIT).
  *
- * Its other job (Talkies settings → Wallpaper → From your phone): a page to pick a photo, which the phone itself crops
+ * Its other job (ColourTV settings → Wallpaper → From your phone): a page to pick a photo, which the phone itself crops
  * to the TV's 16:9 and re-encodes as a 1920 × 1080 JPEG (so it arrives small, without the photo's location or other
  * details), then sends as the one POST.
  */

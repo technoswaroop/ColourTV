@@ -14,7 +14,7 @@ import java.util.List;
  */
 final class RecentApps {
     static final int MAX = 12;
-    /** How many are remembered for Talkies settings → All apps order → Recently opened. */
+    /** How many are remembered for ColourTV settings → All apps order → Recently opened. */
     private static final int KEEP = 100;
 
     private RecentApps() { }

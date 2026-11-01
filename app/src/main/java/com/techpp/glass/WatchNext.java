@@ -27,7 +27,7 @@ import java.util.Set;
  * "next episode" entries are used; "new season" and watchlist entries are promotions, not things you watched.
  * Blocking (database + artwork downloads): call it off the main thread.
  * Episodes you haven't started (the "next episode" entries) don't show the app's still from them, which can give the
- * story away (Talkies settings → Hide spoilers): the app's poster when it's landscape, else the still blurred, with
+ * story away (ColourTV settings → Hide spoilers): the app's poster when it's landscape, else the still blurred, with
  * a portrait poster on the small cards. An idea from harrydbarnes (discussion #14).
  */
 final class WatchNext {
@@ -115,7 +115,7 @@ final class WatchNext {
         return out;
     }
 
-    /** Talkies settings → Hide spoilers (off unless you turn it on: the app's own stills are what people expect). */
+    /** ColourTV settings → Hide spoilers (off unless you turn it on: the app's own stills are what people expect). */
     static boolean hideSpoilers(Context c) {
         return c.getSharedPreferences("home", Context.MODE_PRIVATE).getBoolean("hide_spoilers", false);
     }

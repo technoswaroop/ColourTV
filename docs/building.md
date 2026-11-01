@@ -1,7 +1,7 @@
-# Building Talkies
+# Building ColourTV
 
-For changing Talkies, or installing it from source. To just install it, the ready APK in the
-[README](../README.md#install) is simpler. Everything Talkies does is in the [guide](guide.md).
+For changing ColourTV, or installing it from source. To just install it, the ready APK in the
+[README](../README.md#install) is simpler. Everything ColourTV does is in the [guide](guide.md).
 
 - [What you need](#what-you-need)
 - [Connect to the TV](#connect-to-the-tv)
@@ -62,11 +62,11 @@ Gradle, so it takes a few minutes.
 
 1. **Choose your dock** in `app/src/main/res/values/dock.xml` (package names; list yours with the command under
    [Rearrange apps](guide.md#rearrange-apps)). You can rearrange on the TV later.
-2. **Build and install**: `./build-and-install.sh`. It makes Talkies the home screen and grants the permissions it
+2. **Build and install**: `./build-and-install.sh`. It makes ColourTV the home screen and grants the permissions it
    can (location for the Wi-Fi name, TV listings for Watch Next), and puts back keys saved by the key scripts.
 3. **On the TV**, finish the [first-time setup](../README.md#first-time-setup) (Accessibility and notification
    access).
-4. **Keys and your weather area**: on the TV in Talkies settings → **Keys and location**, or from here:
+4. **Keys and your weather area**: on the TV in ColourTV settings → **Keys and location**, or from here:
    ```bash
    ./set-tmdb-key.sh                    # picks (paste the key when it asks)
    ./set-cricket-key.sh                 # cricket scores
@@ -97,29 +97,29 @@ adb -s 192.168.1.20:5555 push cricket_key.txt /sdcard/Android/data/com.techpp.gl
 ```
 
 **Google TV only:** leave its launcher and setup wizard (`com.google.android.tungsten.setupwraith`) on, although both
-answer Home: Talkies' Accessibility switch keeps the Home button on Talkies. The screensaver needs the wizard for your
+answer Home: ColourTV' Accessibility switch keeps the Home button on ColourTV. The screensaver needs the wizard for your
 Google Photos. More in the guide: [Google TV's setup wizard](guide.md#google-tvs-setup-wizard).
 
 ## Scripts
 
 ```bash
 ./build-and-install.sh                 # optimised build (about 200 KB, no libraries), install, set as home
-./restore.sh                           # the TV's own home screen back, Talkies removed
-./restore.sh --keep-talkies            # the TV's own home screen back, Talkies kept
+./restore.sh                           # the TV's own home screen back, ColourTV removed
+./restore.sh --keep-talkies            # the TV's own home screen back, ColourTV kept
 ./switch-home.sh list|talkies|stock    # choose the home screen (see the guide)
 ./set-region.sh GB                     # use another country for picks, cricket and °C/°F (--remove: the TV's own)
 ./set-tmdb-key.sh / set-cricket-key.sh / set-location.sh   # keys and weather area (--remove clears one)
-./backup-settings.sh                   # copy Talkies' settings from the TV to talkies-backup.json here
+./backup-settings.sh                   # copy ColourTV' settings from the TV to talkies-backup.json here
 ./restore-settings.sh                  # put them back (after reinstalling, or on another TV)
-./release-apk.sh                       # maintainer only: attach the signed talkies.apk to this version's release
+./release-apk.sh                       # maintainer only: attach the signed colourtv.apk to this version's release
 ```
 
 Every script takes the TV's address as an optional last argument; otherwise it uses `TALKIES_TV` or the `.tv` file.
 The build script uses Homebrew's paths unless `JAVA_HOME` / `ANDROID_HOME` say otherwise.
 
-**Back up your settings:** `./backup-settings.sh` saves Talkies settings, the dock and app order, hidden apps, remote
+**Back up your settings:** `./backup-settings.sh` saves ColourTV settings, the dock and app order, hidden apps, remote
 keys, channels, football leagues, the keys and the weather area (and your `wallpaper.jpg`) to `talkies-backup.json`
-next to the scripts. After an uninstall, or on another TV, install Talkies, open it once, and run
+next to the scripts. After an uninstall, or on another TV, install ColourTV, open it once, and run
 `./restore-settings.sh`: it starts again with everything as it was. The picks, scores and weather aren't in it; they
 fetch again. The file holds your keys, so git ignores it; keep it private.
 
@@ -128,13 +128,12 @@ screen the same way whatever density the TV reports.
 
 ## Signing and releases
 
-- **Your build** is signed with your computer's debug key. A build from another computer, or the release APK, can't
-  install over it: uninstall first (back up your settings before). It can't take updates from Talkies settings →
-  Updates either; it's only told when a new version is out.
-- **The release APK** (`talkies.apk` on each release) is signed with the project's key, which only the maintainer
-  has (`release.properties`, never in git). Talkies only installs updates signed with that key.
+- **Your build** is signed with your computer's Android debug key. Builds and release APKs signed with that same key
+  can update one another; builds from a different computer usually cannot.
+- **The release APK** (`colourtv.apk` on each release) must be signed with the certificate pinned in
+  `SelfUpdate.java`. Keep its private key out of git; users need the same signing key for future in-app updates.
 - **Making a release** (maintainer): bump `versionCode` and `versionName` in `app/build.gradle` and the CHANGELOG,
   commit, tag `vX.Y.Z`, push, `gh release create vX.Y.Z`, then `./release-apk.sh` builds, checks the signature and
-  attaches `talkies.apk`.
-- Talkies uses an accessibility service, which is fine for sideloading but not allowed on Google Play for this
+  attaches `colourtv.apk`.
+- ColourTV uses an accessibility service, which is fine for sideloading but not allowed on Google Play for this
   purpose.

@@ -41,7 +41,7 @@ import java.util.List;
  * those launchers and the Assistant.
  *
  * Keys: it filters Home (above), OK while the sleep warning is up ("15 more minutes"), and remote buttons you've
- * given a job in Talkies settings → Remote keys (RemoteKeys); every other key passes through untouched. A button with a
+ * given a job in ColourTV settings → Remote keys (RemoteKeys); every other key passes through untouched. A button with a
  * hold job does it when held for HOLD_MS, and its press job when let go sooner.
  *
  * With "Home at power-on: Always" set, Talkies also comes up each time the TV wakes from standby, unless you press a
@@ -89,7 +89,7 @@ public class SleepService extends AccessibilityService {
         return running != null && running.performGlobalAction(GLOBAL_ACTION_POWER_DIALOG);
     }
 
-    /** Talkies settings → Home at power-on: "boot" (after a restart only) or "always" (every wake from standby). */
+    /** ColourTV settings → Home at power-on: "boot" (after a restart only) or "always" (every wake from standby). */
     static boolean homeOnWake(Context c) {
         return "always".equals(c.getSharedPreferences("home", MODE_PRIVATE).getString("home_at_power_on", "boot"));
     }
@@ -318,7 +318,7 @@ public class SleepService extends AccessibilityService {
     }
 
     /**
-     * Talkies settings → Remote keys, On (the default) or Off. On, Home goes straight to Talkies, as other launchers do.
+     * ColourTV settings → Remote keys, On (the default) or Off. On, Home goes straight to Talkies, as other launchers do.
      * Off, the service doesn't watch the remote's buttons, because on some TVs any service that does stops a held
      * Volume button repeating, in every app; Home still reaches Talkies through the window watcher, with Google TV's
      * home showing for a moment. The sleep warning's OK and choosing a button for a remote key turn watching on while they need it.

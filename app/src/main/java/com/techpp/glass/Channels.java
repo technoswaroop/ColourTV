@@ -21,7 +21,7 @@ import java.util.Set;
 /**
  * App channels: the rows apps publish to Android TV ("Top Picks For You" from JioHotstar, "Netflix", "Recommended
  * for you" from YouTube…), plus Watch Next, shown as Projectivy does. You choose which show and their order
- * (Talkies settings → Channels); that is kept in the "channels" preferences. Until you do, Watch Next and the rows
+ * (ColourTV settings → Channels); that is kept in the "channels" preferences. Until you do, Watch Next and the rows
  * each app asked Android TV to show on the home screen are shown. Artwork is cached in files/channels/.
  * Reading programs and downloading artwork is blocking: call off the main thread.
  */

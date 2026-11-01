@@ -103,7 +103,7 @@ final class RemoteKeys {
         if (action == null) return "Normal";
         if (action.equals(INPUTS)) return "Inputs";
         if (action.equals(RECENTS)) return "Recent apps";
-        if (action.equals(HOME)) return "Talkies";
+        if (action.equals(HOME)) return "ColourTV";
         if (action.equals(NONE)) return "Nothing";
         if (action.startsWith(APP)) return "Open " + Channels.label(c.getPackageManager(), action.substring(APP.length()));
         return action;

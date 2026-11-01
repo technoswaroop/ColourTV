@@ -17,7 +17,7 @@ import java.util.Locale;
 import java.util.concurrent.Executor;
 
 /**
- * Talkies settings → Wallpaper → Bing picture of the day: the photo on Bing's home page, saved as files/bing.jpg and
+ * ColourTV settings → Wallpaper → Bing picture of the day: the photo on Bing's home page, saved as files/bing.jpg and
  * fetched at most once every few hours while the home screen is in front. Off by default: it means asking Bing once a
  * day. Your own wallpaper.jpg wins over it. Bing allows its pictures as wallpaper only; Talkies skips a day whose
  * picture isn't. An idea from Plume (MIT).

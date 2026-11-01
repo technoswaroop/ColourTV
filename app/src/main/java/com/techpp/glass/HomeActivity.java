@@ -74,7 +74,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Talkies. One screen: "For You" with tabs (Continue, Trending, New in India) and a row of picks, round icon
+ * Talkies. One screen: "For You" with tabs (What's on Today, Continue, Trending, New in India), round icon
  * buttons and a small time · date · weather line at the top right, a dock of seven apps in one band, and every other
  * app below the fold. Light by day, dark at night. The remote is handled entirely here, so navigation is exact.
  */
@@ -82,12 +82,15 @@ public class HomeActivity extends Activity {
     private static final String TAG = "GlassHome";
 
     // Where focus is.
-    private static final int Z_TOP = 0, Z_TABS = 1, Z_PICKS = 2, Z_DOCK = 3, Z_GRID = 4, Z_MENU = 5, Z_CHAN = 6, Z_ALL = 7;
+    private static final int Z_TOP = 0, Z_TABS = 1, Z_PICKS = 2, Z_DOCK = 3, Z_GRID = 4, Z_MENU = 5, Z_CHAN = 6, Z_ALL = 7,
+            Z_TODAY = 8, Z_CAMERA = 9, Z_CAMERA_FULLSCREEN = 10;
     private static final int P_CONTROL = 0, P_INPUTS = 1, P_WIFI = 2, P_SETTINGS = 3, P_BELL = 4;
-    private static final String[] TAB_IDS = {RecentStore.TAB, Trending.TRENDING, Trending.INDIA};
-    private static final int TAB_TRENDING = 1, MIN_CONTINUE = 10, MAX_CONTINUE = 16, MAX_YOUTUBE = 2;
+    private static final int TAB_TODAY = 0, TAB_CAMERA = 1, TAB_CONTINUE = 2, TAB_TRENDING = 3, TAB_INDIA = 4;
+    private static final int TODAY_CALENDAR_COLOR = 0, TODAY_CALENDAR_DARK = 1, TODAY_STOCKS = 2;
+    private static final String[] TAB_IDS = {"today", "cameras", RecentStore.TAB, Trending.TRENDING, Trending.INDIA};
+    private static final int MIN_CONTINUE = 10, MAX_CONTINUE = 16, MAX_YOUTUBE = 2;
     private static final int GRID_COLS = 6;
-    /** How many apps the dock holds (Talkies settings → Dock size); the tiles shrink or grow to fit. */
+    /** How many apps the dock holds (ColourTV settings → Dock size); the tiles shrink or grow to fit. */
     private static final int[] DOCK_SIZES = {5, 6, 7, 8, 9, 10};
     // Geometry (dp, on a 960 × 540 dp screen).
     private static final int DOCK_MAX_W = 146, DOCK_GAP = 12, ALL_BUTTON = 44, GRID_TILE_W = 133, GRID_TILE_H = 75, GRID_GAP_X = 16,
@@ -109,6 +112,8 @@ public class HomeActivity extends Activity {
     private TextView[] tabs;
     private ImageView[] icons;
     private PicksRow picksRow;
+    private TodayPanel todayPanel;
+    private CameraPanel cameraPanel;
     private HighlightView ring;
 
     // Apps: the dock's seven first, then the rest in your order.
@@ -130,7 +135,7 @@ public class HomeActivity extends Activity {
     /** When a remote key last moved focus, and whether a channel update is waiting for the remote to go still. */
     private long lastKeyAt;
     private boolean chanPending;
-    /** The icon Talkies settings drops down from (Control Center, or the gear when you held OK on it). */
+    /** The icon ColourTV settings drops down from (Control Center, or the gear when you held OK on it). */
     private int settingsAt = P_CONTROL;
     private static final long CHAN_IDLE_MS = 4000;   // each channel row's scroll, in px
     // The Channels editor (Control Center → Channels).
@@ -139,9 +144,14 @@ public class HomeActivity extends Activity {
     private boolean menuMoving, channelsEdited;
     /** The arrow being handled is a repeat from holding it down: menus then stop at their ends instead of wrapping. */
     private boolean heldKey;
+    private boolean stockDialogOpen;
+    private android.app.AlertDialog stockDialog;
+    private boolean cameraDialogOpen;
+    private android.app.AlertDialog cameraDialog;
 
     // Picks for the three tabs, and what the row shows now.
     private Trending trending;
+    private Today today;
     private Weather weather;
     private Cricket cricket;
     private Football football;
@@ -151,16 +161,17 @@ public class HomeActivity extends Activity {
     private String weatherLine;
     private List<Trending.Pick> watchNextPicks = new ArrayList<>(), recentPicks = new ArrayList<>(),
             trendPicks = new ArrayList<>(), indiaPicks = new ArrayList<>(), rowPicks = new ArrayList<>();
-    private int tabIdx = TAB_TRENDING;
+    private int tabIdx = TAB_TODAY;
     private long pickHour = -1;
     private final ExecutorService background = Executors.newSingleThreadExecutor();
 
     // Focus.
-    private int zone = Z_DOCK, iconIdx = P_CONTROL, dockIdx = 0, gridIdx = 0;  // Up starts on Control Center, then the icon used last
+    private int zone = Z_DOCK, iconIdx = P_CONTROL, dockIdx = 0, gridIdx = 0, todayAction = TODAY_CALENDAR_COLOR;  // Up starts on Control Center, then the icon used last
     private int menuIdx, menuAnchor = P_INPUTS;
+    private int cameraIdx;
     private View menuTile;          // a menu opened on an app or card sits by it (else under its top-bar icon)
     private Runnable menuClosed;    // and closing it puts focus back there
-    // Back in a menu opened from another menu's row (Control Center → Talkies settings → Dock apps) goes up one
+    // Back in a menu opened from another menu's row (Control Center → ColourTV settings → Dock apps) goes up one
     // level: what reopens each menu above, with the row you came from.
     private Runnable menuOpener;
     private final java.util.ArrayDeque<Object[]> menuParents = new java.util.ArrayDeque<>();
@@ -279,9 +290,27 @@ public class HomeActivity extends Activity {
         allAppsLabel = findViewById(R.id.all_apps_label);
         moveHint = findViewById(R.id.move_hint);
         picksRow = findViewById(R.id.picks);
+        todayPanel = new TodayPanel(this);
+        todayPanel.setHeadlineClickListener(this::showHeadlineDetails);
+        todayPanel.setNewsSectionClickListener(() -> showAllHeadlineDetails(todayPanel.displayedHeadlines()));
+        FrameLayout.LayoutParams todayPanelParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, px(248));
+        todayPanelParams.setMarginStart(px(40));
+        todayPanelParams.setMarginEnd(px(40));
+        todayPanelParams.topMargin = px(142);
+        page.addView(todayPanel, page.indexOfChild(picksRow) + 1, todayPanelParams);
+        cameraPanel = new CameraPanel(this);
+        FrameLayout.LayoutParams cameraPanelParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, px(248));
+        cameraPanelParams.setMarginStart(px(40));
+        cameraPanelParams.setMarginEnd(px(40));
+        cameraPanelParams.topMargin = px(142);
+        page.addView(cameraPanel, page.indexOfChild(todayPanel) + 1, cameraPanelParams);
+        cameraPanel.setConfigureListener(this::configureCamera);
         picksHint = findViewById(R.id.picks_hint);
         ring = findViewById(R.id.ring);
-        tabs = new TextView[]{findViewById(R.id.tab_recent), findViewById(R.id.tab_trending), findViewById(R.id.tab_india)};
+        tabs = new TextView[]{findViewById(R.id.tab_today), findViewById(R.id.tab_cameras), findViewById(R.id.tab_recent),
+                findViewById(R.id.tab_trending), findViewById(R.id.tab_india)};
         icons = new ImageView[]{findViewById(R.id.icon_cc), findViewById(R.id.icon_inputs), findViewById(R.id.icon_wifi),
                 findViewById(R.id.icon_settings), findViewById(R.id.icon_bell)};
         Updates.setListener(this::onUpdates);
@@ -293,6 +322,7 @@ public class HomeActivity extends Activity {
         AppEntry.setBannerSize(px(Math.max(GRID_TILE_W * 1.10f, DOCK_MAX_W * 1.14f)), px(Math.max(GRID_TILE_H * 1.10f, DOCK_MAX_W * 9 / 16f * 1.14f)));
         AppEntry.customDir = new File(getExternalFilesDir(null), "tiles");
         trending = new Trending(this);
+        today = new Today(this);
         weather = new Weather(this);
         bing = new Bing(this, background);
         cricket = new Cricket(this);
@@ -380,8 +410,21 @@ public class HomeActivity extends Activity {
         }
         for (View t : dockTiles) t.setBackground(rounded(theme.tileBg, 0, 11));
         for (View t : gridTiles) t.setBackground(rounded(theme.tileBg, 0, 11));
+        updateTodayPanel();
         styleTop();
         updateInfo();
+    }
+
+    private void updateTodayPanel() {
+        if (todayPanel != null && today != null) {
+            todayPanel.setSnapshot(today.cached(), day, theme.text, theme.text2);
+            if (zone == Z_TODAY && todayAction >= TodayPanel.ACTION_HEADLINE_BASE) {
+                int lastHeadline = todayPanel.headlineCount() - 1;
+                if (lastHeadline < 0) focusToday(TODAY_STOCKS);
+                else if (todayAction - TodayPanel.ACTION_HEADLINE_BASE > lastHeadline)
+                    focusToday(TodayPanel.ACTION_HEADLINE_BASE + lastHeadline);
+            }
+        }
     }
 
     /**
@@ -444,12 +487,14 @@ public class HomeActivity extends Activity {
         }
         for (int i = 0; i < tabs.length; i++) {
             boolean selected = i == tabIdx, f = zone == Z_TABS && selected;
-            tabs[i].setVisibility(picksFor(i).isEmpty() ? View.GONE : View.VISIBLE);
+            tabs[i].setVisibility(i == TAB_TODAY || i == TAB_CAMERA || !picksFor(i).isEmpty() ? View.VISIBLE : View.GONE);
             tabs[i].setTextColor(f ? theme.iconFocusFg : selected ? theme.text : theme.text2);
             tabs[i].setFontVariationSettings(selected ? "'wght' 600" : "'wght' 400");
             tabs[i].setBackground(f ? rounded(theme.iconFocusBg, 0, 15) : null);
         }
-        credit.setVisibility(!forYou || tabIdx == 0 || rowPicks.isEmpty() ? View.GONE : View.VISIBLE);
+        todayPanel.setFocused(zone == Z_TODAY ? todayAction : -1, day);
+        credit.setVisibility(!forYou || tabIdx == TAB_TODAY || tabIdx == TAB_CONTINUE || rowPicks.isEmpty()
+                ? View.GONE : View.VISIBLE);
     }
 
     /**
@@ -580,16 +625,18 @@ public class HomeActivity extends Activity {
 
     private void onMinute() {
         updateInfo();
+        updateTodayPanel();
         refreshOnline();
         boolean nowDay = isDayNow();
         if (nowDay != day) { day = nowDay; applyTheme(); }
         // New picks on the hour, but never while you're looking through them.
-        if (Trending.localHour() != pickHour && zone != Z_PICKS && zone != Z_TABS && tabIdx != 0) buildPicksRow(0);
+        if (Trending.localHour() != pickHour && zone != Z_PICKS && zone != Z_TABS
+                && tabIdx != TAB_TODAY && tabIdx != TAB_CAMERA && tabIdx != TAB_CONTINUE) buildPicksRow(0);
     }
 
     /** Appearance from Control Center: Auto (by sunrise and sunset), Light or Dark. */
     private static final String[] APPEARANCE = {"Auto", "Light", "Dark"};
-    /** How All apps is arranged (Talkies settings → All apps order). The dock always keeps your order. */
+    /** How All apps is arranged (ColourTV settings → All apps order). The dock always keeps your order. */
     private static final String[] APPS_ORDER = {"Your order", "Recently opened", "A to Z"};
     private static final int ORDER_YOURS = 0, ORDER_RECENT = 1, ORDER_AZ = 2;
     /** RecentApps as of the last loadApps, so coming home re-sorts only when something new was opened. */
@@ -625,7 +672,7 @@ public class HomeActivity extends Activity {
             all.add(new AppEntry(ri.activityInfo, String.valueOf(ri.loadLabel(pm)).trim()));
         }
         // Phone apps with no TV entry (Chrome, MacroDroid, Speedtest… sideloaded): their tile is made from the icon.
-        // Talkies settings → Phone apps hides them, for TVs that list system screens this way. Idea from @dossantosee.
+        // ColourTV settings → Phone apps hides them, for TVs that list system screens this way. Idea from @dossantosee.
         if (prefs.getBoolean("phone_apps", true)) {
             Intent phone = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
             for (ResolveInfo ri : pm.queryIntentActivities(phone, 0)) {
@@ -1129,7 +1176,10 @@ public class HomeActivity extends Activity {
         indiaPicks = trending.cached(Trending.INDIA);
     }
 
-    private List<Trending.Pick> picksFor(int t) { return t == 0 ? recentPicks : t == 1 ? trendPicks : indiaPicks; }
+    private List<Trending.Pick> picksFor(int t) {
+        return t == TAB_CONTINUE ? recentPicks : t == TAB_TRENDING ? trendPicks : t == TAB_INDIA ? indiaPicks
+                : Collections.emptyList();
+    }
 
     /**
      * Continue: what apps put on Android's Watch Next list (Netflix, Prime Video…, opening the right episode) plus what
@@ -1188,17 +1238,47 @@ public class HomeActivity extends Activity {
             rowPicks = new ArrayList<>();
             picksRow.setItems(new ArrayList<>(), 0);
             picksRow.setVisibility(View.GONE);
+            todayPanel.setVisibility(View.GONE);
+            cameraPanel.setVisibility(View.GONE);
+            cameraPanel.setStreamVisible(false);
             showPicksHint();
             styleTop();
             updateAmbient();
             return;
         }
-        if (picksFor(tabIdx).isEmpty()) {
-            for (int t = 0; t < TAB_IDS.length; t++) if (!picksFor(t).isEmpty()) { tabIdx = t; break; }
+        if (tabIdx != TAB_TODAY && tabIdx != TAB_CAMERA && picksFor(tabIdx).isEmpty()) {
+            for (int t = TAB_CONTINUE; t < TAB_IDS.length; t++) if (!picksFor(t).isEmpty()) { tabIdx = t; break; }
         }
-        rowPicks = tabIdx == 0 ? picksFor(0) : rotated(picksFor(tabIdx));
+        if (tabIdx == TAB_TODAY) {
+            rowPicks = new ArrayList<>();
+            picksRow.setItems(new ArrayList<>(), 0);
+            picksRow.setVisibility(View.GONE);
+            todayPanel.setVisibility(View.VISIBLE);
+            cameraPanel.setVisibility(View.GONE);
+            cameraPanel.setStreamVisible(false);
+            showPicksHint();
+            styleTop();
+            updateAmbient();
+            return;
+        }
+        if (tabIdx == TAB_CAMERA) {
+            rowPicks = new ArrayList<>();
+            picksRow.setItems(new ArrayList<>(), 0);
+            picksRow.setVisibility(View.GONE);
+            todayPanel.setVisibility(View.GONE);
+            cameraPanel.setVisibility(View.VISIBLE);
+            cameraPanel.setStreamVisible(true);
+            showPicksHint();
+            styleTop();
+            updateAmbient();
+            return;
+        }
+        cameraPanel.setVisibility(View.GONE);
+        cameraPanel.setStreamVisible(false);
+        todayPanel.setVisibility(View.GONE);
+        rowPicks = tabIdx == TAB_CONTINUE ? picksFor(TAB_CONTINUE) : rotated(picksFor(tabIdx));
         StringBuilder from = new StringBuilder();
-        if (tabIdx == 0) for (Trending.Pick p : rowPicks) from.append(' ').append(p.pkg.substring(p.pkg.lastIndexOf('.') + 1));
+        if (tabIdx == TAB_CONTINUE) for (Trending.Pick p : rowPicks) from.append(' ').append(p.pkg.substring(p.pkg.lastIndexOf('.') + 1));
         Log.i(TAG, "row " + TAB_IDS[tabIdx] + ": " + rowPicks.size() + " cards" + from);
         List<View> views = new ArrayList<>();
         for (Trending.Pick p : rowPicks) views.add(pickView(p));
@@ -1212,16 +1292,16 @@ public class HomeActivity extends Activity {
 
     /** Nothing to show yet: say why, rather than leave a gap. Without a TMDB key only Continue ever fills. */
     private void showPicksHint() {
-        boolean show = forYou && rowPicks.isEmpty();
+        boolean show = forYou && tabIdx != TAB_TODAY && tabIdx != TAB_CAMERA && rowPicks.isEmpty();
         picksHint.setVisibility(show ? View.VISIBLE : View.GONE);
         if (!show) return;
         picksHint.setText(Keys.read(this, Keys.TMDB) == null
-                ? "Trending and new picks need a free TMDB key: Control Center → Talkies settings → Keys and location"
+                ? "Trending and new picks need a free TMDB key: Control Center → ColourTV settings → Keys and location"
                 : trending.matchedApps() == 0
-                ? "Trending shows what's on your streaming apps, and none Talkies knows is installed. With YouTube installed, it shows trailers instead."
+                ? "Trending shows what's on your streaming apps, and none of the installed apps has a matching title. With YouTube installed, it shows trailers instead."
                 : !trending.languages().isEmpty()
-                ? "Nothing in " + languagesLabel() + " on your apps here right now. More languages: Talkies settings → Picks languages."
-                : "Picks appear here once Talkies is online. Shows you watch show up under Continue.");
+                ? "Nothing in " + languagesLabel() + " on your apps here right now. More languages: ColourTV settings → Picks languages."
+                : "Picks appear here once ColourTV is online. Shows you watch show up under Continue.");
     }
 
     /** A pick: the image card (with a progress bar when the app shares one), its title, and a description line. */
@@ -1412,7 +1492,8 @@ public class HomeActivity extends Activity {
                 if (!sameKeys(recentPicks, merged)) {
                     recentPicks = merged;
                     // Also when the row is empty: on a new TV it waits on Trending, which may never fill (no key).
-                    if ((tabIdx == 0 || rowPicks.isEmpty()) && zone != Z_PICKS) buildPicksRow(0);
+                    if ((tabIdx == TAB_CONTINUE || (rowPicks.isEmpty() && tabIdx != TAB_CAMERA)) && zone != Z_PICKS)
+                        buildPicksRow(0);
                     else styleTop();
                 }
             });
@@ -1428,12 +1509,16 @@ public class HomeActivity extends Activity {
     private void onPicks(List<Trending.Pick> all) {
         trendPicks = trending.cached(Trending.TRENDING);
         indiaPicks = trending.cached(Trending.INDIA);
-        if (zone != Z_PICKS && zone != Z_TABS) { tabIdx = TAB_TRENDING; buildPicksRow(0); } else styleTop();
+        if (tabIdx != TAB_TODAY && tabIdx != TAB_CAMERA && zone != Z_PICKS && zone != Z_TABS) {
+            tabIdx = TAB_TRENDING;
+            buildPicksRow(0);
+        } else styleTop();
     }
 
-    /** The section opens on Trending; if it had to fall back (no picks yet), switch back once they exist. */
+    /** Keep the selected section unless a picks tab was waiting for Trending to arrive. */
     private void backToTrending() {
-        if (tabIdx != TAB_TRENDING && !trendPicks.isEmpty() && zone != Z_PICKS && zone != Z_TABS) {
+        if (tabIdx != TAB_TODAY && tabIdx != TAB_CAMERA && tabIdx != TAB_TRENDING && !trendPicks.isEmpty()
+                && zone != Z_PICKS && zone != Z_TABS) {
             tabIdx = TAB_TRENDING;
             buildPicksRow(0);
         } else styleTop();
@@ -1541,6 +1626,46 @@ public class HomeActivity extends Activity {
         styleTop();
     }
 
+    private void focusToday(int action) {
+        zone = Z_TODAY;
+        todayAction = action;
+        scrollPage(0);
+        View target;
+        if (action == TodayPanel.ACTION_NEWS_SECTION)
+            target = todayPanel.newsSectionButton();
+        else if (action >= TodayPanel.ACTION_HEADLINE_BASE)
+            target = todayPanel.headlineButton(action - TodayPanel.ACTION_HEADLINE_BASE);
+        else target = action == TODAY_CALENDAR_COLOR ? todayPanel.calendarColorButton()
+                    : action == TODAY_CALENDAR_DARK ? todayPanel.calendarDarkButton() : todayPanel.addStockButton();
+        if (target == null) return;
+        setFocus(target, 1.03f, 8);
+        styleTop();
+        followRing(220);
+    }
+
+    private void focusSection() {
+        if (tabIdx == TAB_TODAY) focusToday(TODAY_CALENDAR_COLOR);
+        else if (tabIdx == TAB_CAMERA) focusCamera(0);
+        else focusPicks(picksRow.anchor());
+    }
+
+    private void focusCamera(int index) {
+        zone = Z_CAMERA;
+        cameraIdx = Math.max(0, Math.min(2, index));
+        scrollPage(0);
+        setFocus(cameraPanel.tile(cameraIdx), 1.03f, 8);
+        styleTop();
+        followRing(220);
+    }
+
+    private void focusCameraFullscreen() {
+        zone = Z_CAMERA_FULLSCREEN;
+        scrollPage(0);
+        setFocus(cameraPanel.fullscreenButton(), 1.04f, 10);
+        styleTop();
+        followRing(220);
+    }
+
     private void focusPicks(int i) {
         if (rowPicks.isEmpty()) return;
         zone = Z_PICKS;
@@ -1624,6 +1749,15 @@ public class HomeActivity extends Activity {
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent e) {
+        if (stockDialogOpen || cameraDialogOpen) {
+            if ((e.getKeyCode() == KeyEvent.KEYCODE_BACK || e.getKeyCode() == KeyEvent.KEYCODE_ESCAPE)
+                    && e.getAction() == KeyEvent.ACTION_UP) {
+                if (stockDialog != null) stockDialog.dismiss();
+                if (cameraDialog != null) cameraDialog.dismiss();
+                return true;
+            }
+            return super.dispatchKeyEvent(e);
+        }
         int k = e.getKeyCode();
         boolean select = k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER
                 || k == KeyEvent.KEYCODE_NUMPAD_ENTER || k == KeyEvent.KEYCODE_BUTTON_A;
@@ -1674,14 +1808,15 @@ public class HomeActivity extends Activity {
     }
 
     private int nextTab(int t, int step) {
-        for (int i = t + step; i >= 0 && i < TAB_IDS.length; i += step) if (!picksFor(i).isEmpty()) return i;
+        for (int i = t + step; i >= 0 && i < TAB_IDS.length; i += step)
+            if (i == TAB_TODAY || i == TAB_CAMERA || !picksFor(i).isEmpty()) return i;
         return -1;
     }
 
     private void move(int k) {
         boolean left = k == KeyEvent.KEYCODE_DPAD_LEFT, right = k == KeyEvent.KEYCODE_DPAD_RIGHT,
                 up = k == KeyEvent.KEYCODE_DPAD_UP, down = k == KeyEvent.KEYCODE_DPAD_DOWN;
-        boolean hasPicks = !rowPicks.isEmpty();
+        boolean hasSection = forYou && (tabIdx == TAB_TODAY || tabIdx == TAB_CAMERA || !rowPicks.isEmpty());
         switch (zone) {
             case Z_MENU:
                 // The ends wrap around on a fresh press: Up from the first row reaches the last one (About, Updates…)
@@ -1695,13 +1830,45 @@ public class HomeActivity extends Activity {
             case Z_TOP:
                 if (left && iconIdx > 0) focusTop(iconIdx - 1);
                 else if (right && iconIdx < icons.length - 1 && icons[iconIdx + 1].getVisibility() == View.VISIBLE) focusTop(iconIdx + 1);
-                else if (down) { if (hasPicks) focusTabs(tabIdx); else focusDock(dockIdx); }
+                else if (down) { if (hasSection) focusTabs(tabIdx); else focusDock(dockIdx); }
                 break;  // Up, and the ends of the row, go nowhere.
             case Z_TABS:
                 if (left && nextTab(tabIdx, -1) >= 0) focusTabs(nextTab(tabIdx, -1));
                 else if (right && nextTab(tabIdx, 1) >= 0) focusTabs(nextTab(tabIdx, 1));
                 else if (up) focusTop(iconIdx);
-                else if (down) focusPicks(picksRow.anchor());
+                else if (down) focusSection();
+                break;
+            case Z_TODAY:
+                if (todayAction == TodayPanel.ACTION_NEWS_SECTION) {
+                    if (left) focusToday(TODAY_STOCKS);
+                    else if (down && todayPanel.headlineCount() > 0)
+                        focusToday(TodayPanel.ACTION_HEADLINE_BASE);
+                    else if (up) focusTabs(TAB_TODAY);
+                } else if (todayAction >= TodayPanel.ACTION_HEADLINE_BASE) {
+                    int headlineIndex = todayAction - TodayPanel.ACTION_HEADLINE_BASE;
+                    if (left) focusToday(TodayPanel.ACTION_NEWS_SECTION);
+                    else if (up && headlineIndex > 0) focusToday(todayAction - 1);
+                    else if (up) focusToday(TodayPanel.ACTION_NEWS_SECTION);
+                    else if (down && headlineIndex < todayPanel.headlineCount() - 1) focusToday(todayAction + 1);
+                    else if (down) focusDock(dockIdx);
+                } else {
+                    if (left && todayAction > TODAY_CALENDAR_COLOR) focusToday(todayAction - 1);
+                    else if (right && todayAction < TODAY_STOCKS) focusToday(todayAction + 1);
+                    else if (right && todayAction == TODAY_STOCKS)
+                        focusToday(TodayPanel.ACTION_NEWS_SECTION);
+                    if (up) focusTabs(TAB_TODAY);
+                    else if (down) focusDock(dockIdx);
+                }
+                break;
+            case Z_CAMERA:
+                if (left && cameraIdx > 0) focusCamera(cameraIdx - 1);
+                else if (right && cameraIdx < 2) focusCamera(cameraIdx + 1);
+                else if (up) focusCameraFullscreen();
+                else if (down) focusDock(dockIdx);
+                break;
+            case Z_CAMERA_FULLSCREEN:
+                if (up) focusTabs(TAB_CAMERA);
+                else if (down) focusCamera(cameraIdx);
                 break;
             case Z_PICKS:
                 if (left && picksRow.anchor() > 0) focusPicks(picksRow.anchor() - 1);
@@ -1713,13 +1880,13 @@ public class HomeActivity extends Activity {
                 if (left && dockIdx > 0) focusDock(dockIdx - 1);
                 else if (right && dockIdx < dockTiles.size() - 1) focusDock(dockIdx + 1);
                 else if (right && allTile != null) focusAllTile();
-                else if (up) { if (hasPicks) focusPicks(picksRow.anchor()); else focusTop(iconIdx); }
+                else if (up) { if (hasSection) focusSection(); else focusTop(iconIdx); }
                 else if (down && !chanRows.isEmpty()) focusChan(0, chanCol[0]);
                 else if (down && !gridTiles.isEmpty()) focusGrid(Math.min(dockToGridCol(dockIdx), gridTiles.size() - 1));
                 break;
             case Z_ALL:
                 if (left) focusDock(dockTiles.size() - 1);
-                else if (up) { if (hasPicks) focusPicks(picksRow.anchor()); else focusTop(iconIdx); }
+                else if (up) { if (hasSection) focusSection(); else focusTop(iconIdx); }
                 else if (down && !chanRows.isEmpty()) focusChan(0, chanCol[0]);
                 else if (down) focusGrid(GRID_COLS - 1);
                 break;
@@ -1765,7 +1932,8 @@ public class HomeActivity extends Activity {
     /** Where focus is: changes whenever a move took it somewhere, so a press at an end makes no sound. */
     private String focusSignature() {
         return zone + "," + iconIdx + "," + tabIdx + "," + picksRow.anchor() + "," + dockIdx + "," + gridIdx + "," + chanIdx
-                + "," + (chanIdx < chanCol.length ? chanCol[chanIdx] : 0) + "," + menuIdx + "," + appIndex();
+                + "," + (chanIdx < chanCol.length ? chanCol[chanIdx] : 0) + "," + menuIdx + "," + todayAction
+                + "," + cameraIdx + "," + appIndex();
     }
 
     /**
@@ -1807,7 +1975,23 @@ public class HomeActivity extends Activity {
                 else openTvSettings();
                 break;
             case Z_TABS:
-                focusPicks(picksRow.anchor());
+                focusSection();
+                break;
+            case Z_TODAY:
+                if (todayAction == TodayPanel.ACTION_NEWS_SECTION)
+                    showAllHeadlineDetails(todayPanel.displayedHeadlines());
+                else if (todayAction >= TodayPanel.ACTION_HEADLINE_BASE)
+                    showHeadlineDetails(todayPanel.headlineAt(todayAction - TodayPanel.ACTION_HEADLINE_BASE));
+                else if (todayAction == TODAY_CALENDAR_COLOR) todayPanel.toggleCalendarColor();
+                else if (todayAction == TODAY_CALENDAR_DARK) todayPanel.toggleCalendarDark();
+                else manageTodayStocks();
+                break;
+            case Z_CAMERA:
+                if (cameraPanel.config(cameraIdx) == null) configureCamera(cameraIdx);
+                else cameraPanel.openFullscreen(cameraIdx);
+                break;
+            case Z_CAMERA_FULLSCREEN:
+                cameraPanel.openFullscreenAll();
                 break;
             case Z_PICKS:
                 openPick(rowPicks.get(picksRow.anchor()));
@@ -1848,7 +2032,7 @@ public class HomeActivity extends Activity {
         }
         Intent i = p.pkg == null ? null : pm.getLeanbackLaunchIntentForPackage(p.pkg);
         if (i != null) startFromTile(i);
-        else if (p.extra instanceof Cricket.Match && ((Cricket.Match) p.extra).football) Toast.makeText(this, "Talkies doesn't know where to watch football yet", Toast.LENGTH_SHORT).show();
+        else if (p.extra instanceof Cricket.Match && ((Cricket.Match) p.extra).football) Toast.makeText(this, "ColourTV doesn't know where to watch football yet", Toast.LENGTH_SHORT).show();
         else if (p.extra instanceof Cricket.Match) Toast.makeText(this, "None of your apps has a card for this match", Toast.LENGTH_SHORT).show();
     }
 
@@ -1874,14 +2058,14 @@ public class HomeActivity extends Activity {
         if (pm.resolveActivity(i, 0) == null) {
             Intent tv = new Intent(Intent.ACTION_MAIN).setClassName("com.android.tv.settings", "com.android.tv.settings.MainSettings");
             if (pm.resolveActivity(tv, 0) != null) i = tv;
-            else Toast.makeText(this, "This TV has no settings app Talkies can open", Toast.LENGTH_SHORT).show();
+            else Toast.makeText(this, "This TV has no settings app ColourTV can open", Toast.LENGTH_SHORT).show();
         }
         start(i);
     }
 
     /**
      * The app grows out of the focused tile or card, from the ring's rectangle. It's the window animation Android
-     * draws anyway, only starting from the tile instead of the middle, so it costs nothing extra. Talkies settings
+     * draws anyway, only starting from the tile instead of the middle, so it costs nothing extra. ColourTV settings
      * → Apps open from their tile turns it off. An idea from Plume (MIT).
      */
     private Bundle fromTile() {
@@ -2128,7 +2312,7 @@ public class HomeActivity extends Activity {
     private void openInputs() { openInputs(!prefs.getBoolean("inputs_connected_only", false)); }
 
     /**
-     * HDMI and AV ports, then Live TV. With Talkies settings → Empty inputs set to "Under More inputs", ports with
+     * HDMI and AV ports, then Live TV. With ColourTV settings → Empty inputs set to "Under More inputs", ports with
      * nothing plugged in wait behind a More inputs row ({@code all} false). An idea from CleanYourTV (MIT).
      */
     private void openInputs(boolean all) {
@@ -2389,7 +2573,7 @@ public class HomeActivity extends Activity {
                 "For the Trending and New picks. Free at themoviedb.org → Settings → API: the API Key or the API Read "
                         + "Access Token." + paste, null, true, tmdb != null, text -> saveKey(Keys.TMDB, "TMDB", text, 1)), true);
         addRow("Cricket key", cricket == null ? "Not set" : Keys.masked(cricket), () -> askText("CricketData key",
-                "For live cricket scores. Free at cricketdata.org (100 requests a day, enough for Talkies)." + paste,
+                "For live cricket scores. Free at cricketdata.org (100 requests a day, enough for ColourTV)." + paste,
                 null, true, cricket != null, text -> saveKey(Keys.CRICKET, "CricketData", text, 2)), true);
         // Coordinates pinpoint a home, so the row (and any screenshot of it) just says so; place names show as typed.
         String where = area == null ? "Not set" : area.matches("[-+0-9.,\\s]+") ? "Coordinates"
@@ -2428,6 +2612,462 @@ public class HomeActivity extends Activity {
         field.requestFocus();
     }
 
+    private void manageTodayStocks() {
+        Set<String> selected = new java.util.LinkedHashSet<>(today.manualSymbols());
+        Set<String> available = new HashSet<>();
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(px(8), px(4), px(8), 0);
+
+        TextView note = new TextView(this);
+        note.setText("Choose up to " + Today.MAX_MANUAL_STOCKS
+                + " stocks. Jio Platforms is unlisted; Jio Financial Services is listed separately.");
+        note.setTextSize(13);
+        note.setTextColor(0xFFB9C1D0);
+        content.addView(note, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        TextView count = new TextView(this);
+        count.setTextSize(12);
+        count.setTextColor(0xFFB9C1D0);
+        LinearLayout.LayoutParams countParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        countParams.topMargin = px(6);
+        content.addView(count, countParams);
+
+        android.widget.ScrollView scroll = new android.widget.ScrollView(this);
+        LinearLayout choices = new LinearLayout(this);
+        choices.setOrientation(LinearLayout.VERTICAL);
+        scroll.addView(choices);
+        LinearLayout.LayoutParams scrollParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(190));
+        scrollParams.topMargin = px(4);
+        content.addView(scroll, scrollParams);
+
+        Runnable updateCount = () -> count.setText(selected.size() + " of " + Today.MAX_MANUAL_STOCKS + " selected");
+        java.util.function.BiConsumer<String, String> addChoice = (label, symbol) -> {
+            available.add(symbol);
+            android.widget.CheckBox checkbox = new android.widget.CheckBox(this);
+            checkbox.setText(label);
+            checkbox.setTextSize(14);
+            checkbox.setMinHeight(px(36));
+            checkbox.setPadding(px(4), 0, px(4), 0);
+            checkbox.setTextColor(0xFFF2F3F7);
+            checkbox.setButtonTintList(android.content.res.ColorStateList.valueOf(0xFF7E9BFF));
+            checkbox.setChecked(selected.contains(symbol));
+            checkbox.setOnCheckedChangeListener((button, checked) -> {
+                if (checked && !selected.contains(symbol) && selected.size() >= Today.MAX_MANUAL_STOCKS) {
+                    button.setChecked(false);
+                    Toast.makeText(this, "Choose up to " + Today.MAX_MANUAL_STOCKS + " stocks", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                if (checked) selected.add(symbol);
+                else selected.remove(symbol);
+                updateCount.run();
+            });
+            choices.addView(checkbox, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(38)));
+        };
+        updateCount.run();
+        addChoice.accept("Coforge  ·  COFORGE.NS", "COFORGE.NS");
+        addChoice.accept("Jio Financial Services  ·  JIOFIN.NS", "JIOFIN.NS");
+        addChoice.accept("HDFC Bank  ·  HDFCBANK.NS", "HDFCBANK.NS");
+        addChoice.accept("Reliance Industries  ·  RELIANCE.NS", "RELIANCE.NS");
+        addChoice.accept("Tata Motors Passenger Vehicles  ·  TMPV.NS", "TMPV.NS");
+        for (String symbol : selected) {
+            if (!available.contains(symbol)) addChoice.accept(symbol + "  ·  custom", symbol);
+        }
+
+        LinearLayout customRow = new LinearLayout(this);
+        customRow.setGravity(Gravity.CENTER_VERTICAL);
+        android.widget.EditText customSymbol = new android.widget.EditText(this);
+        customSymbol.setSingleLine(true);
+        customSymbol.setHint("Add ticker, e.g. TCS.NS");
+        customSymbol.setTextSize(14);
+        customSymbol.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+                | android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
+        customRow.addView(customSymbol, new LinearLayout.LayoutParams(0, px(48), 1f));
+        TextView addTicker = new TextView(this);
+        addTicker.setText("ADD");
+        addTicker.setTextSize(12);
+        addTicker.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        addTicker.setTextColor(0xFF9FB5FF);
+        addTicker.setGravity(Gravity.CENTER);
+        addTicker.setPadding(px(14), 0, px(14), 0);
+        customRow.addView(addTicker, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, px(44)));
+        content.addView(customRow, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(48)));
+        addTicker.setOnClickListener(view -> {
+            String symbol = Today.normalizeSymbol(customSymbol.getText().toString());
+            if (!Today.isValidSymbol(symbol)) {
+                Toast.makeText(this, "Enter a ticker such as TCS.NS", Toast.LENGTH_SHORT).show();
+            } else if (available.contains(symbol)) {
+                Toast.makeText(this, "That ticker is already in the list", Toast.LENGTH_SHORT).show();
+            } else if (selected.size() >= Today.MAX_MANUAL_STOCKS) {
+                Toast.makeText(this, "Remove a stock before adding another", Toast.LENGTH_SHORT).show();
+            } else {
+                addChoice.accept(symbol + "  ·  custom", symbol);
+                ((android.widget.CheckBox) choices.getChildAt(choices.getChildCount() - 1)).setChecked(true);
+                customSymbol.setText("");
+                scroll.post(() -> scroll.fullScroll(View.FOCUS_DOWN));
+            }
+
+        });
+
+        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Manage stock watchlist")
+                .setView(content)
+                .setPositiveButton("Save", null)
+                .setNegativeButton("Cancel", null)
+                .create();
+        stockDialog = dialog;
+        dialog.setOnDismissListener(d -> {
+            stockDialogOpen = false;
+            if (stockDialog == dialog) stockDialog = null;
+        });
+        stockDialogOpen = true;
+        dialog.show();
+        dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
+            String error = today.updateManualSymbols(String.join(", ", selected));
+            if (error != null) {
+                Toast.makeText(this, error, Toast.LENGTH_LONG).show();
+                return;
+            }
+            dialog.dismiss();
+            updateTodayPanel();
+            today.refreshIfStale(this::updateTodayPanel);
+            Toast.makeText(this, "Stock watchlist saved", Toast.LENGTH_SHORT).show();
+        });
+    }
+
+    private void showAllHeadlineDetails(List<Today.Headline> headlines) {
+        android.app.Dialog dialog = new android.app.Dialog(this, android.R.style.Theme_DeviceDefault_NoActionBar);
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setPadding(px(28), px(18), px(28), px(18));
+        page.setBackgroundColor(0xFF17191E);
+
+        LinearLayout header = new LinearLayout(this);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        TextView title = new TextView(this);
+        title.setText("INDIA & WORLD · NEWS");
+        title.setTextSize(20);
+        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        title.setTextColor(0xFFF2F3F7);
+        header.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        TextView close = new TextView(this);
+        close.setText("CLOSE");
+        close.setTextSize(14);
+        close.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        close.setTextColor(0xFFB9C9FF);
+        close.setGravity(Gravity.CENTER);
+        close.setFocusable(true);
+        close.setClickable(true);
+        close.setPadding(px(18), px(10), px(18), px(10));
+        close.setOnClickListener(view -> dialog.dismiss());
+        header.addView(close, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+        page.addView(header, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        android.widget.ScrollView scroll = new android.widget.ScrollView(this);
+        LinearLayout rows = new LinearLayout(this);
+        rows.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams rowsParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        rowsParams.topMargin = px(10);
+        scroll.addView(rows, rowsParams);
+        for (Today.Headline headline : headlines) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.VERTICAL);
+            row.setPadding(px(16), px(12), px(16), px(12));
+            row.setBackground(rounded(0xFF24262D, 0x00000000, 10));
+
+            TextView section = new TextView(this);
+            section.setText(headline.section);
+            section.setTextSize(12);
+            section.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            section.setTextColor(headline.section.startsWith("WORLD") ? 0xFF92AAEC : 0xFF62B6A1);
+            row.addView(section, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT));
+
+            TextView headlineTitle = new TextView(this);
+            headlineTitle.setText(headline.title);
+            headlineTitle.setTextSize(17);
+            headlineTitle.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            headlineTitle.setTextColor(0xFFF2F3F7);
+            LinearLayout.LayoutParams headlineTitleParams = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            headlineTitleParams.topMargin = px(5);
+            row.addView(headlineTitle, headlineTitleParams);
+
+            if (!headline.published.isEmpty()) {
+                TextView published = new TextView(this);
+                published.setText(headline.published);
+                published.setTextSize(11);
+                published.setTextColor(0xFFB9C1D0);
+                LinearLayout.LayoutParams publishedParams = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                publishedParams.topMargin = px(4);
+                row.addView(published, publishedParams);
+            }
+
+            if (!headline.description.isEmpty()) {
+                TextView description = new TextView(this);
+                description.setText(android.text.Html.fromHtml(headline.description,
+                        android.text.Html.FROM_HTML_MODE_COMPACT));
+                description.setTextSize(14);
+                description.setTextColor(0xFFE0E2E8);
+                description.setLineSpacing(px(2), 1f);
+                LinearLayout.LayoutParams descriptionParams = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                descriptionParams.topMargin = px(7);
+                row.addView(description, descriptionParams);
+            }
+
+            Uri articleUri = Uri.parse(headline.link);
+            String scheme = articleUri.getScheme();
+            if (("https".equalsIgnoreCase(scheme) || "http".equalsIgnoreCase(scheme))
+                    && articleUri.getHost() != null) {
+                TextView openArticle = new TextView(this);
+                openArticle.setText("OPEN ARTICLE");
+                openArticle.setTextSize(12);
+                openArticle.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+                openArticle.setTextColor(0xFF9FB5FF);
+                openArticle.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+                openArticle.setFocusable(true);
+                openArticle.setClickable(true);
+                LinearLayout.LayoutParams openParams = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, px(36));
+                openParams.topMargin = px(4);
+                row.addView(openArticle, openParams);
+                openArticle.setOnClickListener(view -> {
+                    try {
+                        startActivity(new Intent(Intent.ACTION_VIEW, articleUri));
+                    } catch (ActivityNotFoundException | SecurityException e) {
+                        Log.w(TAG, "Cannot open news article " + articleUri, e);
+                        Toast.makeText(this, "No app is available to open this article", Toast.LENGTH_LONG).show();
+                    }
+                });
+            }
+
+            LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
+            rowParams.bottomMargin = px(8);
+            rows.addView(row, rowParams);
+        }
+        if (headlines.isEmpty()) {
+            TextView empty = new TextView(this);
+            empty.setText("No headlines are available. Check the TV's internet connection and try again.");
+            empty.setTextSize(16);
+            empty.setTextColor(0xFFE0E2E8);
+            rows.addView(empty);
+        }
+
+        LinearLayout.LayoutParams scrollParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f);
+        scrollParams.topMargin = px(8);
+        page.addView(scroll, scrollParams);
+        dialog.setContentView(page);
+        dialog.setOnShowListener(ignored -> close.requestFocus());
+        dialog.show();
+        android.view.Window window = dialog.getWindow();
+        if (window != null) {
+            window.setBackgroundDrawableResource(android.R.color.transparent);
+            window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+            window.setFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                    android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        }
+    }
+
+    private void showHeadlineDetails(Today.Headline headline) {
+        if (headline == null) return;
+        LinearLayout details = new LinearLayout(this);
+        details.setOrientation(LinearLayout.VERTICAL);
+        details.setPadding(px(8), px(4), px(8), px(4));
+
+        TextView section = new TextView(this);
+        section.setText(headline.section);
+        section.setTextSize(12);
+        section.setTextColor(0xFF9FB5FF);
+        details.addView(section, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        TextView title = new TextView(this);
+        title.setText(headline.title);
+        title.setTextSize(18);
+        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        title.setTextColor(0xFFF2F3F7);
+        LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        titleParams.topMargin = px(8);
+        details.addView(title, titleParams);
+
+        if (!headline.published.isEmpty()) {
+            TextView published = new TextView(this);
+            published.setText(headline.published);
+            published.setTextSize(12);
+            published.setTextColor(0xFFB9C1D0);
+            LinearLayout.LayoutParams publishedParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
+            publishedParams.topMargin = px(6);
+            details.addView(published, publishedParams);
+        }
+
+        TextView description = new TextView(this);
+        String summary = headline.description.isEmpty()
+                ? "No additional details were provided by this news feed."
+                : headline.description;
+        description.setText(android.text.Html.fromHtml(summary, android.text.Html.FROM_HTML_MODE_COMPACT));
+        description.setTextSize(15);
+        description.setTextColor(0xFFE0E2E8);
+        description.setLineSpacing(px(3), 1f);
+        LinearLayout.LayoutParams descriptionParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        descriptionParams.topMargin = px(10);
+        details.addView(description, descriptionParams);
+
+        android.widget.ScrollView scroll = new android.widget.ScrollView(this);
+        scroll.addView(details);
+        scroll.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(280)));
+
+        Uri articleUri = Uri.parse(headline.link);
+        String scheme = articleUri.getScheme();
+        boolean hasArticle = ("https".equalsIgnoreCase(scheme) || "http".equalsIgnoreCase(scheme))
+                && articleUri.getHost() != null;
+        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this,
+                android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Headline details")
+                .setView(scroll)
+                .setNegativeButton("Close", null);
+        if (hasArticle) {
+            builder.setPositiveButton("Open article", (dialog, which) -> {
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW, articleUri));
+                } catch (ActivityNotFoundException | SecurityException e) {
+                    Log.w(TAG, "Cannot open news article " + articleUri, e);
+                    Toast.makeText(this, "No app is available to open this article", Toast.LENGTH_LONG).show();
+                }
+            });
+        }
+        builder.show();
+    }
+
+    private void configureCamera(int index) {
+        CameraPanel.Config saved = cameraPanel.config(index);
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(px(8), px(4), px(8), 0);
+
+        TextView instructions = new TextView(this);
+        instructions.setText("Enable RTSP in the Tapo app under Camera Settings → Advanced Settings → Camera Account. "
+                + "Use that local camera account below; this does not use your Tapo cloud password.");
+        instructions.setTextSize(13);
+        instructions.setTextColor(0xFFDDDDDD);
+        instructions.setPadding(0, 0, 0, px(10));
+        content.addView(instructions);
+
+        android.widget.EditText cameraName = new android.widget.EditText(this);
+        cameraName.setSingleLine(true);
+        cameraName.setTextSize(15);
+        cameraName.setHint("Camera name, e.g. Living Room");
+        cameraName.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+                | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+                | android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        cameraName.setText(saved == null ? cameraPanel.cameraName(index) : saved.name);
+        content.addView(cameraName, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(48)));
+
+        android.widget.EditText host = new android.widget.EditText(this);
+        host.setSingleLine(true);
+        host.setTextSize(15);
+        host.setHint("Camera IP address, e.g. 192.168.1.25");
+        host.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+                | android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
+        if (saved != null) host.setText(saved.host);
+        content.addView(host, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(48)));
+
+        android.widget.EditText username = new android.widget.EditText(this);
+        username.setSingleLine(true);
+        username.setTextSize(15);
+        username.setHint("Tapo camera account username");
+        username.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+                | android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
+        if (saved != null) username.setText(saved.username);
+        content.addView(username, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(48)));
+
+        android.widget.EditText password = new android.widget.EditText(this);
+        password.setSingleLine(true);
+        password.setTextSize(15);
+        password.setHint(saved == null ? "Tapo camera account password" : "Camera password (saved; re-enter to change)");
+        password.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        content.addView(password, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(48)));
+
+        android.widget.CheckBox lowBandwidth = new android.widget.CheckBox(this);
+        lowBandwidth.setText("Use lower-bandwidth stream (stream2)");
+        lowBandwidth.setTextSize(13);
+        lowBandwidth.setTextColor(0xFFFFFFFF);
+        lowBandwidth.setChecked(saved != null && saved.lowBandwidth);
+        content.addView(lowBandwidth, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(44)));
+
+        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle(saved == null ? "Set up camera" : "Camera settings")
+                .setView(content)
+                .setPositiveButton("Save and connect", null)
+                .setNeutralButton(saved == null ? null : "Remove camera", null)
+                .setNegativeButton("Cancel", null)
+                .create();
+        cameraDialog = dialog;
+        dialog.setOnDismissListener(d -> {
+            cameraDialogOpen = false;
+            if (cameraDialog == dialog) cameraDialog = null;
+        });
+        cameraDialogOpen = true;
+        dialog.show();
+        dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
+            String address = host.getText().toString().trim();
+            String name = cameraName.getText().toString().trim();
+            String user = username.getText().toString().trim();
+            String secret = password.getText().toString();
+            if (saved != null && secret.isEmpty()) secret = saved.password;
+            if (name.isEmpty() || name.length() > 32) {
+                cameraName.setError("Enter a name of 1–32 characters");
+                cameraName.requestFocus();
+                return;
+            }
+            if (!address.matches("[A-Za-z0-9.-]{1,253}") || address.startsWith(".") || address.endsWith(".")
+                    || address.contains("..")) {
+                host.setError("Enter the camera's local IP address or hostname");
+                host.requestFocus();
+                return;
+            }
+            if (user.isEmpty()) {
+                username.setError("Enter the camera account username");
+                username.requestFocus();
+                return;
+            }
+            if (secret.isEmpty()) {
+                password.setError("Enter the camera account password");
+                password.requestFocus();
+                return;
+            }
+            try {
+                cameraPanel.saveConfig(index, new CameraPanel.Config(name, address, user, secret, lowBandwidth.isChecked()));
+                dialog.dismiss();
+                Toast.makeText(this, "Camera settings saved on this TV", Toast.LENGTH_SHORT).show();
+            } catch (java.security.GeneralSecurityException | java.io.IOException | org.json.JSONException e) {
+                Log.e(TAG, "Could not save encrypted camera settings", e);
+                Toast.makeText(this, "Couldn't securely save camera settings", Toast.LENGTH_LONG).show();
+            }
+        });
+        if (saved != null) {
+            dialog.getButton(android.app.AlertDialog.BUTTON_NEUTRAL).setOnClickListener(view -> {
+                try {
+                    cameraPanel.removeConfig(index);
+                    dialog.dismiss();
+                    Toast.makeText(this, "Camera removed", Toast.LENGTH_SHORT).show();
+                } catch (java.security.GeneralSecurityException | java.io.IOException | org.json.JSONException e) {
+                    Log.e(TAG, "Could not remove encrypted camera settings", e);
+                    Toast.makeText(this, "Couldn't remove camera settings", Toast.LENGTH_LONG).show();
+                }
+            });
+        }
+    }
+
     /** Tries the key with the service first: a key it turns down isn't saved; one that can't be checked offline is. */
     private void saveKey(String file, String service, String text, int row) {
         if (text.isEmpty()) {
@@ -2451,7 +3091,7 @@ public class HomeActivity extends Activity {
                 }
                 Toast.makeText(this, result == Keys.OK
                         ? "The key works. " + (file.equals(Keys.TMDB) ? "Picks arrive" : "Scores arrive") + " in a minute"
-                        : "Couldn't reach " + service + " to check it. Saved; Talkies will try it later", Toast.LENGTH_LONG).show();
+                        : "Couldn't reach " + service + " to check it. Saved; ColourTV will try it later", Toast.LENGTH_LONG).show();
                 if (zone == Z_MENU) openKeysAndLocation(row);
                 refreshOnline();
             });
@@ -2555,7 +3195,7 @@ public class HomeActivity extends Activity {
 
     private static final String SUPPORT_URL = "https://buymeacoffee.com/rajupp";
 
-    /** About → Support Talkies: the Buy Me a Coffee page as a QR code, since a TV has no easy way to open a link. */
+    /** About → Support original project: a Buy Me a Coffee QR code for its original maintainer. */
     private void showSupport() {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
@@ -2568,8 +3208,8 @@ public class HomeActivity extends Activity {
         where.setPadding(0, px(8), 0, 0);
         box.addView(where);
         new android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle("Support Talkies")
-                .setMessage("Talkies is free, with no ads or tracking, and built in my spare time. If you enjoy it, "
+                .setTitle("Support original project")
+                .setMessage("The original Talkies project is free, with no ads or tracking, and was built in spare time. If you enjoy it, "
                         + "scan this with your phone to buy me a popcorn. Thank you!")
                 .setView(box)
                 .setNegativeButton("Close", null)
@@ -2596,7 +3236,7 @@ public class HomeActivity extends Activity {
 
     private void openRemoteKeys() {
         boolean on = SleepService.watchButtons(this);
-        beginMenu(settingsAt, on ? "Remote keys  ·  On: Home goes straight to Talkies. Some TVs then change volume one step per press"
+        beginMenu(settingsAt, on ? "Remote keys  ·  On: Home goes straight to ColourTV. Some TVs then change volume one step per press"
                 : "Remote keys  ·  Off: holding Volume works on every TV. Home shows Google TV for a moment first");
         addRow("Remote keys", on ? "On" : "Off", () -> {
             prefs.edit().putBoolean("remote_keys_on", !on).apply();
@@ -2638,7 +3278,7 @@ public class HomeActivity extends Activity {
         addRow("Open an app", null, () -> openKeyApps(code), false);
         addRow("Inputs", null, () -> setKey(code, RemoteKeys.INPUTS), false);
         addRow("Recent apps", null, () -> setKey(code, RemoteKeys.RECENTS), false);
-        addRow("Talkies", null, () -> setKey(code, RemoteKeys.HOME), false);
+        addRow("ColourTV", null, () -> setKey(code, RemoteKeys.HOME), false);
         addRow("Do nothing", null, () -> setKey(code, RemoteKeys.NONE), false);
         if (RemoteKeys.action(this, code) != null) {
             String hold = RemoteKeys.holdAction(this, code);
@@ -2655,7 +3295,7 @@ public class HomeActivity extends Activity {
         addRow("Open an app", null, () -> openKeyApps(code, true), false);
         addRow("Inputs", null, () -> setHold(code, RemoteKeys.INPUTS), false);
         addRow("Recent apps", null, () -> setHold(code, RemoteKeys.RECENTS), false);
-        addRow("Talkies", null, () -> setHold(code, RemoteKeys.HOME), false);
+        addRow("ColourTV", null, () -> setHold(code, RemoteKeys.HOME), false);
         if (hold != null) addRow("Same as a press", null, () -> setHold(code, null), false);
         showMenu(420);
     }
@@ -2796,7 +3436,7 @@ public class HomeActivity extends Activity {
 
     /**
      * Asked once, the first time Talkies starts without them (an APK installed without a computer): the two
-     * permissions. Talkies settings → Finish setup asks again, and lists the switches only Settings can turn on.
+     * permissions. ColourTV settings → Finish setup asks again, and lists the switches only Settings can turn on.
      */
     private void askPermissionsOnce() {
         if (!permissionsMissing() || prefs.getBoolean("setup_asked", false)) return;
@@ -2804,11 +3444,11 @@ public class HomeActivity extends Activity {
         requestPermissions(SETUP_PERMISSIONS, REQ_SETUP);
     }
 
-    /** Talkies settings → Finish setup: one row per step still to do; OK opens the place it's done. */
+    /** ColourTV settings → Finish setup: one row per step still to do; OK opens the place it's done. */
     private void openFinishSetup() {
         beginMenu(settingsAt, "Finish setup");
-        if (!SleepService.isRunning()) addRow("Home button", "Accessibility → Talkies", () -> {
-            Toast.makeText(this, "Switch on Talkies here: it keeps the Home button on Talkies", Toast.LENGTH_LONG).show();
+        if (!SleepService.isRunning()) addRow("Home button", "Accessibility → ColourTV", () -> {
+            Toast.makeText(this, "Switch on ColourTV here: it keeps the Home button on ColourTV", Toast.LENGTH_LONG).show();
             Intent i = new Intent().setClassName("com.android.tv.settings", "com.android.tv.settings.oemlink.AccessibilitySettingsActivity");
             if (pm.resolveActivity(i, 0) == null) i = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
             start(i);
@@ -2822,7 +3462,7 @@ public class HomeActivity extends Activity {
                 start(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName())));
             }, false);
         if (!notificationAccess()) addRow("Notification access", "Continue, Now playing, the bell", () -> {
-            Toast.makeText(this, "Switch on Talkies here", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Switch on ColourTV here", Toast.LENGTH_LONG).show();
             start(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
         }, false);
         if (permissionsMissing()) addRow("Wi-Fi name and Watch Next", "OK asks", () -> {
@@ -2976,10 +3616,10 @@ public class HomeActivity extends Activity {
         saveOrder();
         setHidden(pkg, true);
         reloadApps();
-        Toast.makeText(this, app.label + " hidden. Talkies settings → Hidden apps brings it back", Toast.LENGTH_LONG).show();
+        Toast.makeText(this, app.label + " hidden. ColourTV settings → Hidden apps brings it back", Toast.LENGTH_LONG).show();
     }
 
-    /** Talkies settings → Hidden apps: OK on one shows it again (at the end of All apps). */
+    /** ColourTV settings → Hidden apps: OK on one shows it again (at the end of All apps). */
     private void openHiddenApps() {
         beginMenu(settingsAt, "Hidden apps  ·  OK shows it again");
         List<String> pkgs = new ArrayList<>(hiddenApps());
@@ -3018,7 +3658,8 @@ public class HomeActivity extends Activity {
 
     /** The focused Continue card (Continue tab or the Watch Next row), or null. */
     private Trending.Pick continueCard() {
-        if (zone == Z_PICKS && tabIdx == 0 && !rowPicks.isEmpty()) return rowPicks.get(Math.min(picksRow.anchor(), rowPicks.size() - 1));
+        if (zone == Z_PICKS && tabIdx == TAB_CONTINUE && !rowPicks.isEmpty())
+            return rowPicks.get(Math.min(picksRow.anchor(), rowPicks.size() - 1));
         if (zone == Z_CHAN && chanIdx < chanRows.size() && Channels.WATCH_NEXT.equals(chanRows.get(chanIdx).key)) {
             List<Trending.Pick> items = chanRows.get(chanIdx).items;
             if (!items.isEmpty()) return items.get(Math.min(chanCol[chanIdx], items.size() - 1));
@@ -3054,11 +3695,11 @@ public class HomeActivity extends Activity {
         }
         Log.i(TAG, "Removed from Continue: " + p.title);
         recentPicks = continuePicks(RecentStore.load(this), watchNextPicks);
-        if (zone == Z_PICKS && tabIdx == 0) {
+        if (zone == Z_PICKS && tabIdx == TAB_CONTINUE) {
             int a = Math.max(0, Math.min(picksRow.anchor(), recentPicks.size() - 1));
             buildPicksRow(a);
             if (!rowPicks.isEmpty()) focusPicks(Math.min(a, rowPicks.size() - 1)); else focusDock(dockIdx);
-        } else if (tabIdx == 0) {
+        } else if (tabIdx == TAB_CONTINUE) {
             buildPicksRow(0);
         }
         refocusChannels = zone == Z_CHAN;
@@ -3128,9 +3769,9 @@ public class HomeActivity extends Activity {
         if (list.isEmpty() && mine == null) return;
         beginMenu(P_BELL, "App updates");
         if (mine != null) {
-            // Talkies first: OK downloads and installs it here, the same as Talkies settings → Updates.
+            // Talkies first: OK downloads and installs it here, the same as ColourTV settings → Updates.
             final View[] row = new View[1];
-            row[0] = addRow("Talkies " + mine, "OK installs", () -> SelfUpdate.checkAndInstall(this, st -> runOnUiThread(() -> {
+            row[0] = addRow("ColourTV " + mine, "OK installs", () -> SelfUpdate.checkAndInstall(this, st -> runOnUiThread(() -> {
                 if (row[0].isAttachedToWindow()) setStatus(row[0], st);
             })), true);
         }
@@ -3158,11 +3799,11 @@ public class HomeActivity extends Activity {
 
     private void openControlCenter() {
         beginMenu(P_CONTROL, "Control Center");
-        if (serviceStopped) addRow("Fix Home and Turn off", "switch Talkies off and on", () -> {
-            Toast.makeText(this, "Talkies → off, then on again", Toast.LENGTH_LONG).show();
+        if (serviceStopped) addRow("Fix Home and Turn off", "switch ColourTV off and on", () -> {
+            Toast.makeText(this, "ColourTV → off, then on again", Toast.LENGTH_LONG).show();
             start(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
         }, false);
-        addRow("Talkies settings", null, () -> openTalkiesSettings(P_CONTROL), false);
+        addRow("ColourTV settings", null, () -> openTalkiesSettings(P_CONTROL), false);
         MediaController playing = NowPlaying.current(this);
         if (playing != null) addRow("Now playing", NowPlaying.title(playing), () -> openNowPlaying(playing), false);
         if (weatherLine != null) addRow("Weather", weatherLine, () -> openWeather(false), false);
@@ -3215,12 +3856,12 @@ public class HomeActivity extends Activity {
     }
 
     /**
-     * Talkies settings: what you set once and rarely change (Control Center keeps what you reach for while watching).
+     * ColourTV settings: what you set once and rarely change (Control Center keeps what you reach for while watching).
      * From Control Center's last row, or by holding OK on the gear (a press opens the TV's own settings).
      */
     private void openTalkiesSettings(int anchor) {
         settingsAt = anchor;
-        beginMenu(anchor, "Talkies settings");
+        beginMenu(anchor, "ColourTV settings");
         // First: what a new TV still needs (only while something does), then the keys and the weather area.
         int missing = setupMissing();
         if (missing > 0) addRow("Finish setup", missing + (missing == 1 ? " step left" : " steps left"), this::openFinishSetup, false);
@@ -3244,7 +3885,7 @@ public class HomeActivity extends Activity {
             prefs.edit().putBoolean("for_you", forYou).apply();
             setStatus(fy[0], forYou ? "Shown" : "Hidden");
             applyForYou();
-            tabIdx = TAB_TRENDING;
+            tabIdx = TAB_TODAY;
             buildPicksRow(0);
             if (forYou) refreshOnline();
         }, true);
@@ -3311,7 +3952,7 @@ public class HomeActivity extends Activity {
         adb[0] = addRow("Network debugging", "Checking…", this::openNetworkDebugging, false);
         checkNetworkDebugging(st -> { if (adb[0].isAttachedToWindow()) setStatus(adb[0], st); });
         final View[] wake = new View[1];
-        wake[0] = addRow("Talkies at power-on", wakeLabel(), () -> {
+        wake[0] = addRow("ColourTV at power-on", wakeLabel(), () -> {
             if (!SleepService.isRunning()) { needsTurnOffSetup(); return; }
             prefs.edit().putString("home_at_power_on", SleepService.homeOnWake(this) ? "boot" : "always").apply();
             setStatus(wake[0], wakeLabel());
@@ -3331,13 +3972,13 @@ public class HomeActivity extends Activity {
             // it is the way back; its App info page has Uninstall and Disable.
             String name = String.valueOf(other.loadLabel(pm));
             addRow("Home app", name, () -> {
-                Toast.makeText(this, "Uninstall or disable " + name + " here, then press Home: Talkies takes over",
+                Toast.makeText(this, "Uninstall or disable " + name + " here, then press Home: ColourTV takes over",
                         Toast.LENGTH_LONG).show();
                 start(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + other.activityInfo.packageName)));
             }, false);
         }
-        else if (isGoogleTvLauncher()) addRow("Home app", SleepService.isRunning() ? "Talkies" : currentHomeName(), () -> {
-            Toast.makeText(this, "To use another home screen, turn off Talkies here. Turn it back on to come back to Talkies",
+        else if (isGoogleTvLauncher()) addRow("Home app", SleepService.isRunning() ? "ColourTV" : currentHomeName(), () -> {
+            Toast.makeText(this, "To use another home screen, turn off ColourTV here. Turn it back on to come back to ColourTV",
                     Toast.LENGTH_LONG).show();
             Intent i = new Intent().setClassName("com.android.tv.settings", "com.android.tv.settings.oemlink.AccessibilitySettingsActivity");
             if (pm.resolveActivity(i, 0) == null) i = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
@@ -3368,7 +4009,7 @@ public class HomeActivity extends Activity {
         showMenu(350);
     }
 
-    /** How many installed apps have a phone launcher entry but no TV one (Talkies settings → Phone apps). */
+    /** How many installed apps have a phone launcher entry but no TV one (ColourTV settings → Phone apps). */
     private int phoneOnlyApps() {
         Set<String> tv = new HashSet<>(), phone = new HashSet<>();
         for (ResolveInfo ri : pm.queryIntentActivities(new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER), 0)) {
@@ -3394,7 +4035,7 @@ public class HomeActivity extends Activity {
     }
 
     /**
-     * Talkies settings → Picks languages: the languages Trending and New in … show, from those the country's lists
+     * ColourTV settings → Picks languages: the languages Trending and New in … show, from those the country's lists
      * bring up. OK on one shows only the ones you choose; OK again leaves it out; All languages goes back to all.
      */
     private void openPicksLanguages() {
@@ -3439,7 +4080,7 @@ public class HomeActivity extends Activity {
 
     // ---------------------------------------------------------------- wallpaper
 
-    /** Talkies settings → Wallpaper: a picture of your own (from your phone or this TV), Bing's, or none. */
+    /** ColourTV settings → Wallpaper: a picture of your own (from your phone or this TV), Bing's, or none. */
     private void openWallpaperMenu() {
         beginMenu(settingsAt, "Wallpaper  ·  now: " + wallpaperLabel());
         addRow("From your phone", "scan a QR code", () -> { pictureFor = null; openPhoneWallpaper(); }, false);
@@ -3802,7 +4443,7 @@ public class HomeActivity extends Activity {
     private void openAbout() {
         String version = "";
         try { version = " " + pm.getPackageInfo(getPackageName(), 0).versionName; } catch (PackageManager.NameNotFoundException ignored) { }
-        beginMenu(settingsAt, "Talkies" + version + "  ·  MIT License");
+        beginMenu(settingsAt, "ColourTV" + version + "  ·  MIT License");
         String[][] credits = {
                 {"Weather", "Open-Meteo.com (CC BY 4.0)"},
                 {"Airport temperatures", "aviationweather.gov (NOAA)"},
@@ -3812,9 +4453,10 @@ public class HomeActivity extends Activity {
                 {"Code from", "tv-vibehack, CleanYourTV, Free My TV, Matinee, Luma, GlassLauncher"},
                 {"Font", "Outfit (SIL OFL)"},
         };
-        addRow("Made by", "Raju  ·  TechPP (techpp.com)", () -> { }, true);
-        addRow("Source code", "github.com/rajupp/talkies", () -> { }, true);
-        addRow("Support Talkies", "buymeacoffee.com/rajupp", this::showSupport, true);
+        addRow("Made by", "TechnoSwaroop", () -> { }, true);
+        addRow("Based on", "Talkies by Raju · TechPP (MIT)", () -> { }, true);
+        addRow("Source code", "github.com/technoswaroop/ColourTV", () -> { }, true);
+        addRow("Support original project", "buymeacoffee.com/rajupp", this::showSupport, true);
         // TMDB's terms ask for its logo with the credit: smaller than anything identifying Talkies.
         LinearLayout picks = (LinearLayout) addRow("Picks", null, () -> { }, true);
         ImageView logo = new ImageView(this);
@@ -3895,7 +4537,7 @@ public class HomeActivity extends Activity {
 
     // ---------------------------------------------------------------- control center shortcuts
 
-    /** Control Center rows whose screen you can choose (Talkies settings → Control Center shortcuts): key → row name. */
+    /** Control Center rows whose screen you can choose (ColourTV settings → Control Center shortcuts): key → row name. */
     private static final String[][] SHORTCUTS = {{"network", "Network"}, {"bluetooth", "Bluetooth"},
             {"sound", "Sound output"}, {"storage", "Storage"}};
     /** Words that make a settings screen a likely match for each row, shown first in the list. */
@@ -3919,7 +4561,7 @@ public class HomeActivity extends Activity {
     }
 
     /**
-     * Talkies settings → Control Center shortcuts: for Network, Bluetooth, Sound output and Storage, which screen of the
+     * ColourTV settings → Control Center shortcuts: for Network, Bluetooth, Sound output and Storage, which screen of the
      * TV's settings OK opens (some TVs keep the useful one elsewhere, like Sony's speaker choice). An idea from tvOS
      * Launcher's activity picker.
      */
@@ -3998,7 +4640,7 @@ public class HomeActivity extends Activity {
     // ---------------------------------------------------------------- dock apps
 
     /**
-     * Talkies settings → Dock apps: every app, the dock's first; OK puts one in the dock or takes it out (the same as
+     * ColourTV settings → Dock apps: every app, the dock's first; OK puts one in the dock or takes it out (the same as
      * Add to dock and Remove from dock in an app's hold-OK menu). The rows stay where they are while you change them.
      */
     private void openDockApps() {
@@ -4341,7 +4983,8 @@ public class HomeActivity extends Activity {
         // Something new may have been watched while we were away.
         List<Trending.Pick> before = recentPicks;
         recentPicks = continuePicks(RecentStore.load(this), watchNextPicks);
-        if (!sameKeys(before, recentPicks) && (tabIdx == 0 || rowPicks.isEmpty())) buildPicksRow(0);
+        if (!sameKeys(before, recentPicks) && (tabIdx == TAB_CONTINUE || (rowPicks.isEmpty() && tabIdx != TAB_CAMERA)))
+            buildPicksRow(0);
         refreshWatchNext();
         getContentResolver().registerContentObserver(TvContract.WatchNextPrograms.CONTENT_URI, true, watchNextChanged);
     }
@@ -4368,8 +5011,9 @@ public class HomeActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        tabs[2].setText("New in " + Region.name(Region.country(this)));  // the country can change (Region)
+        tabs[TAB_INDIA].setText("New in " + Region.name(Region.country(this)));  // the country can change (Region)
         inFront = true;
+        if (forYou && tabIdx == TAB_CAMERA) cameraPanel.setStreamVisible(true);
         root.post(this::snapRing);
         // Give Android time to bind the service after Talkies (re)starts before calling it stopped.
         root.removeCallbacks(checkService);
@@ -4425,6 +5069,8 @@ public class HomeActivity extends Activity {
     protected void onPause() {
         super.onPause();
         pressedHere = 0;
+        cameraPanel.closeFullscreen();
+        cameraPanel.releaseStreams();
         SleepService.learn(null);
         inFront = false;
     }
@@ -4442,6 +5088,7 @@ public class HomeActivity extends Activity {
         if (!scores().equals("off") && !scores().equals("football")) cricket.refreshIfStale(this::onMatches);
         if (scores().equals("both") || scores().equals("football")) football.refreshIfStale(this::onFootball);
         weather.refreshIfStale(this::onWeather);
+        if (forYou) today.refreshIfStale(this::updateTodayPanel);
         if (prefs.getBoolean("bing_wallpaper", false)) bing.refreshIfStale(this::loadWallpaper);
         nextFromFolder(null);  // no network needed, but the same moments: a new day's picture while you can see it
         if (forYou) trending.refreshIfStale(this::onPicks);
@@ -4450,14 +5097,14 @@ public class HomeActivity extends Activity {
             boolean news = SelfUpdate.checkIfStale(this);
             runOnUiThread(() -> {
                 onUpdates();
-                if (news) Toast.makeText(this, "Talkies " + SelfUpdate.available(this) + " is out: the bell, top right, installs it",
+                if (news) Toast.makeText(this, "ColourTV " + SelfUpdate.available(this) + " is out: the bell, top right, installs it",
                         Toast.LENGTH_LONG).show();
             });
         });
         if (prefs.getBoolean("youtube_art", false)) RecentStore.upgradeArtwork(this, () -> {
             // Sharper YouTube pictures arrived: redraw Continue and the Watch Next row.
             recentPicks = continuePicks(RecentStore.load(this), watchNextPicks);
-            if (tabIdx == 0 && zone != Z_PICKS) buildPicksRow(0);
+            if (tabIdx == TAB_CONTINUE && zone != Z_PICKS) buildPicksRow(0);
             refreshChannels();
         });
     }
@@ -4483,7 +5130,7 @@ public class HomeActivity extends Activity {
             return;
         }
         SleepService.learn(null);  // Home while "Waiting for a button…": stop listening
-        // Home: back to the dock at the top, on the Trending tab.
+        // Home: back to the dock at the top, on What's on Today.
         if (menuMoving) endMenuMove(false);
         if (zone == Z_MENU) {
             menuScroll.setVisibility(View.GONE);
@@ -4493,8 +5140,8 @@ public class HomeActivity extends Activity {
         }
         endMove(false);
         loadWallpaper();
-        if (tabIdx != TAB_TRENDING && !picksFor(TAB_TRENDING).isEmpty()) {
-            tabIdx = TAB_TRENDING;
+        if (tabIdx != TAB_TODAY) {
+            tabIdx = TAB_TODAY;
             buildPicksRow(0);
         }
         focusDock(dockIdx);

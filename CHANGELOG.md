@@ -1,13 +1,42 @@
 # Changelog
 
-Versions are numbered *major.minor.fix*. While Talkies is in beta they start with 0: a new minor number brings new
-features, a new fix number only fixes. The version shows in Talkies settings → About.
+Versions are numbered *major.minor.fix*. The version shows in ColourTV settings → About. ColourTV is based on the
+MIT-licensed Talkies project by Raju · TechPP.
 
-## Unreleased
+## 1.2.8 — 1 November 2026
+
+### New
+- **ColourTV branding:** the app and launcher listing now use the ColourTV name; About credits TechnoSwaroop and
+  identifies the original Talkies project.
+- **ColourTV settings** replaces Talkies settings in Control Center.
+- **ColourTV releases and updates** now use `technoswaroop/ColourTV` and the `colourtv.apk` release asset.
+- **What's on Today:** refined the Telugu calendar layout and added a full-screen headlines view.
+- **What's on Today:** three cards for the Telugu calendar, India market indices and stocks, and headlines covering
+  business, finance, technology and politics in India and globally.
+
+### Improved
+- **What's on Today:** show the full festival name, remove the shared background behind the cards, and allow up to
+  seven watchlist stocks. The calendar uses its available vertical space for almanac rows and timings; the news card
+  opens a full-screen headlines view, and each headline has a details view.
+- **Camera selection:** a configured camera opens by itself; the Fullscreen button still opens the three-feed layout.
+
+## 1.2.7 — 1 November 2026
+
+### New
+- **What's on Today has three cards:** the Telugu calendar, India market indices and stocks, and a full-height news
+  list covering business, finance, technology and politics in India and globally.
+
+### Fixed
+- **Selecting a configured camera opens only that camera fullscreen.** The Fullscreen button still opens the three-feed
+  layout.
+
+## 1.2.6 — 1 November 2026
 
 ### New
 - **A weather icon** before the weather at the top left: a small line drawing of the sky (sun, moon, partly cloudy
   by day or night, cloud, rain, snow, thunder, fog), in the text's colour.
+- **A camera-feed screensaver.** Select Talkies Camera Live Feed in the TV's screensaver settings to show configured
+  local Tapo cameras in the fullscreen grid.
 
 ## 1.2.5 — 1 November 2026
 

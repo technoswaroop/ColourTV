@@ -28,8 +28,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 
 /**
- * Talkies settings → Updates: a newer GitHub release, downloaded, checked and handed to Android's installer, which
- * asks before installing. Once a day while Talkies is in front, and when you press OK on the row, the latest release
+ * ColourTV settings → Updates: a newer GitHub release, downloaded, checked and handed to Android's installer, which
+ * asks before installing. Once a day while ColourTV is in front, and when you press OK on the row, the latest release
  * is looked up. Only the APK from the releases (signed with the project's key) installs them: the download must come
  * from this repository's releases, match GitHub's size and SHA-256, be this app, be newer, and carry the project's
  * key. A build made on a computer has its own key, so it's only told that a new version is out. Adapted from Free My
@@ -37,12 +37,12 @@ import java.security.MessageDigest;
  */
 final class SelfUpdate {
     private static final String TAG = "GlassSelfUpdate";
-    private static final String LATEST = "https://api.github.com/repos/rajupp/talkies/releases/latest";
+    private static final String LATEST = "https://api.github.com/repos/technoswaroop/ColourTV/releases/latest";
     /** The only place the APK may come from: this repository's releases. */
-    private static final String RELEASES = "https://github.com/rajupp/talkies/releases/download/";
+    private static final String RELEASES = "https://github.com/technoswaroop/ColourTV/releases/download/";
     /** The release key's certificate (SHA-256, as apksigner verify --print-certs shows it). */
-    private static final String RELEASE_CERT = "8de7e80b42b39ac43893b7ab34294312136632f07dbf7a633ed1f67df57c4943";
-    static final String ASSET = "talkies.apk";
+    private static final String RELEASE_CERT = "03bffb12b7584c7437bb7cefc709e996c2d6f36f2605a6cccca0172b6d714f5b";
+    static final String ASSET = "colourtv.apk";
     private static final long MAX_SIZE = 20L << 20;   // the APK is about 200 KB
     private static final long DAY = 24 * 3600_000L;
     static final String ACTION = "com.techpp.glass.UPDATE_STATUS";
@@ -156,7 +156,7 @@ final class SelfUpdate {
         File[] old = dir.listFiles();
         for (int i = 0; old != null && i < old.length; i++) old[i].delete();
         dir.mkdirs();
-        File to = new File(dir, "talkies-" + version + ".apk"), part = new File(to.getPath() + ".part");
+        File to = new File(dir, "colourtv-" + version + ".apk"), part = new File(to.getPath() + ".part");
         MessageDigest sha = MessageDigest.getInstance("SHA-256");
         long total = 0;
         HttpURLConnection h = open(url);
@@ -196,7 +196,7 @@ final class SelfUpdate {
         String name = theirs.versionName == null ? "" : theirs.versionName;
         if (theirs.versionCode <= ours.versionCode || compare(name, ours.versionName) <= 0) return "isn't newer than this one";
         String cert = cert(theirs);
-        if (cert != null && !RELEASE_CERT.equals(cert)) return "isn't signed with Talkies' key";
+        if (cert != null && !RELEASE_CERT.equals(cert)) return "isn't signed with ColourTV's key";
         return null;   // a signature that can't be read here is left to Android's installer, which refuses another key
     }
 
@@ -286,7 +286,7 @@ final class SelfUpdate {
         HttpURLConnection h = (HttpURLConnection) new URL(url).openConnection();
         h.setConnectTimeout(10000);
         h.setReadTimeout(30000);
-        h.setRequestProperty("User-Agent", "Talkies");
+        h.setRequestProperty("User-Agent", "ColourTV");
         return h;
     }
 

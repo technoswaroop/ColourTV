@@ -16,7 +16,7 @@ import java.util.Locale;
 /**
  * Beside the icon buttons: how much RAM and storage are free, each as a label, a figure and a slim bar of what's used.
  * Drawn on one canvas rather than six views; read again on every minute tick (both reads take well under a
- * millisecond). Talkies settings → RAM and storage hides it.
+ * millisecond). ColourTV settings → RAM and storage hides it.
  */
 public class Meters extends View {
     private final Paint label = new Paint(Paint.ANTI_ALIAS_FLAG), value = new Paint(Paint.ANTI_ALIAS_FLAG),

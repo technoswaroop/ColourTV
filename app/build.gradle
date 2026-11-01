@@ -1,5 +1,10 @@
 plugins { id 'com.android.application' }
 
+dependencies {
+    implementation 'androidx.media3:media3-exoplayer:1.8.0'
+    implementation 'androidx.media3:media3-exoplayer-rtsp:1.8.0'
+}
+
 android {
     namespace 'com.techpp.glass'
     compileSdk 35
@@ -8,8 +13,8 @@ android {
         minSdk 26          // Android 8.0, the first with home-screen channels (TvContract preview programs)
         targetSdk 35
         // Each release: versionName as in CHANGELOG.md, versionCode one higher (Android installs only higher codes as updates).
-        versionCode 20
-        versionName '1.2.5'
+        versionCode 23
+        versionName '1.2.8'
     }
     // The project's release key, when this computer has it (release.properties, never in git): APKs signed with it
     // can update each other from Talkies settings → Updates. Anyone else's build signs with their own debug key.
@@ -41,4 +46,4 @@ android {
     }
 }
 
-// No libraries: Android's own framework only, which keeps the APK and memory small.
+// Media3 provides RTSP authentication and transport support for local camera streams.
