@@ -61,6 +61,36 @@
 |---|
 | ![Single-camera fullscreen with Live indicator and settings; private video preview is masked](docs/screenshots/colourtv-features-1.2.8/05-single-camera-fullscreen-privacy-masked.png) |
 
+## What's on Today
+
+The first home tab brings a Telugu panchangam, Indian market quotes and a curated set of India and world headlines into
+one glanceable dashboard. Its three cards keep the calendar, markets and news visible together instead of hiding them
+in separate apps or menus.
+
+- **Telugu day view:** See the weekday and date, tithi, nakshatra, varjyam, festival, yamagandam and durmuhurtham
+  details. The supplied almanac includes October–December 2026; other dates still show the local weekday and date.
+  Choose the calendar's colour and dark appearance independently of the rest of the launcher.
+- **Markets and watchlist:** Follow the Sensex and Nifty 50 alongside up to seven selected stocks. Manage the list
+  from the Markets card: choose from Coforge, Jio Financial Services, HDFC Bank, Reliance Industries and Tata Motors
+  Passenger Vehicles, or enter another Yahoo Finance ticker such as `TCS.NS`. Quotes refresh periodically when
+  ColourTV is visible and online; Yahoo Finance data can be delayed or rate-limited and is not guaranteed to be live.
+- **India and world headlines:** Browse news grouped across business, finance, technology and politics for both
+  India and the world. Select the card heading to open the full-screen list; select an individual headline to read
+  its feed details and follow its source article. Headlines come from Google News RSS and need an internet connection.
+
+## Home Camera Live Feed
+
+Configure up to three local RTSP cameras in the dedicated camera tab. The camera and TV must share your home network;
+for Tapo cameras, enable RTSP in the Tapo app and create a Camera Account, then enter that account and the camera's
+local IP in ColourTV. The camera account is separate from your Tapo cloud login. Name each camera during setup so its
+name appears on the feed.
+
+Select a configured tile to view just that camera fullscreen, or choose **Fullscreen** for the three-camera layout:
+one large feed on the left and two evenly stacked feeds on the right. Live indicators, camera names and Settings stay
+available over the feeds. The optional **ColourTV Camera Live Feed** screensaver reuses the configured cameras and
+fullscreen layout. Camera credentials are encrypted on the TV; feeds stop when you leave the camera tab or pause the
+app.
+
 **Set for where you live, and yours to change.** ColourTV works out your country from the TV's time zone (many TVs
 stay on "English (United States)" wherever they are), and almost everything on the screen can be changed:
 
