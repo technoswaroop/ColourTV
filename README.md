@@ -47,6 +47,20 @@
   picked from the TV or a USB drive, or Bing's picture of the day.
 - **Updates itself:** a bell tells you when a new version is out, and OK installs it.
 
+## Feature screenshots
+
+| What's on Today | Full-screen headlines |
+|---|---|
+| ![What's on Today with the Telugu calendar, Sensex and Nifty watchlist, and India and world headlines](docs/screenshots/colourtv-features-1.2.8/01-whats-on-today.png) | ![Full-screen India and world business, finance, technology and politics headlines](docs/screenshots/colourtv-features-1.2.8/02-headlines-fullscreen.png) |
+
+| Headline details | Camera dashboard |
+|---|---|
+| ![Headline details with category, full headline, source and article link](docs/screenshots/colourtv-features-1.2.8/03-headline-details.png) | ![Three-camera dashboard with named feeds, Live indicators and camera settings; private video previews are masked](docs/screenshots/colourtv-features-1.2.8/04-camera-dashboard-privacy-masked.png) |
+
+| Single-camera fullscreen |
+|---|
+| ![Single-camera fullscreen with Live indicator and settings; private video preview is masked](docs/screenshots/colourtv-features-1.2.8/05-single-camera-fullscreen-privacy-masked.png) |
+
 **Set for where you live, and yours to change.** ColourTV works out your country from the TV's time zone (many TVs
 stay on "English (United States)" wherever they are), and almost everything on the screen can be changed:
 
